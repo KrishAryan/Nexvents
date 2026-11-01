@@ -1,0 +1,149 @@
+{% extends 'base.html' %}{% block title %}QR check-in | NexVents{% endblock %}
+{% block content %}<section class="checkin-page">
+<div class="breadcrumb"><a href="{{ url_for('main.admin_dashboard') }}">Admin dashboard</a><span>/</span>QR check-in</div>
+<div class="form-heading center-heading"><div class="eyebrow">EVENT ENTRY DESK</div><h1>QR ticket check-in</h1><p class="muted">Scan a student's ticket or enter the printed ticket code.</p></div>
+<div class="checkin-grid">
+  <div class="scanner-card">
+    <div class="scanner-head"><b>Camera scanner</b><span class="live-indicator" id="scanner-state">READY</span></div>
+    <div class="camera-stage" id="camera-stage"><video id="camera-video" playsinline muted></video><div class="camera-guide"><span></span></div><div class="camera-message" id="camera-message">Start the camera and hold the QR ticket in front of it.</div></div>
+    <canvas id="scan-canvas" hidden></canvas>
+    <div class="scanner-controls"><button type="button" class="btn btn-primary btn-full" id="start-scan">Start camera</button><button type="button" class="btn btn-ghost btn-full" id="stop-scan" disabled>Stop camera</button></div>
+    <div class="upload-divider"><span>OR SCAN AN IMAGE</span></div>
+    <form id="qr-upload-form" class="upload-form"><label class="upload-pick">Choose QR image<input type="file" id="qr-image" name="qr_image" accept="image/*" required></label><button class="btn btn-dark" type="submit">Read image</button></form>
+    <p class="scanner-note">Camera and image scanning are processed by the NexVents server. Camera access works on localhost; allow the browser permission when prompted.</p>
+  </div>
+  <div class="manual-card"><div class="eyebrow">MANUAL CHECK-IN</div><h2>Enter ticket code</h2><p class="muted">The code is printed underneath the QR on each confirmed ticket.</p>
+    <form method="post" id="code-form" class="form-stack"><label>Ticket code<input id="ticket-code" name="ticket_code" placeholder="NX-XXXXXXXXXX" autocomplete="off" required></label><button class="btn btn-dark btn-full" type="submit">Verify ticket and check in →</button></form>
+    <div id="scan-result" aria-live="polite"></div>
+    {% if result %}<div class="check-result {{ 'ok' if result.ok else 'bad' }}"><b>{{ '✓' if result.ok else '!' }} {{ result.message }}</b>{% if result.row %}<small>{{ result.row.name }} · {{ result.row.title }}</small><small>{{ result.row.ticket_code }}</small>{% endif %}</div>{% endif %}
+    <div class="manual-tip"><b>Entry rules</b><span>Only confirmed tickets are accepted.</span><span>Each ticket can be checked in once.</span><span>Cancelled and waitlisted tickets are rejected.</span></div>
+  </div>
+</div></section>{% endblock %}
+{% block scripts %}<script>
+(() => {
+  const video = document.getElementById('camera-video');
+  const canvas = document.getElementById('scan-canvas');
+  const startButton = document.getElementById('start-scan');
+  const stopButton = document.getElementById('stop-scan');
+  const state = document.getElementById('scanner-state');
+  const message = document.getElementById('camera-message');
+  const resultBox = document.getElementById('scan-result');
+  const uploadForm = document.getElementById('qr-upload-form');
+  const codeField = document.getElementById('ticket-code');
+  if (!video || !startButton) return;
+
+  let stream = null;
+  let scanning = false;
+  let busy = false;
+  const endpoint = {{ url_for('main.scan_ticket_qr')|tojson }};
+
+  function showResult(data) {
+    resultBox.innerHTML = '';
+    const box = document.createElement('div');
+    box.className = 'check-result ' + (data.ok ? 'ok' : 'bad');
+    const title = document.createElement('b');
+    title.textContent = (data.ok ? '✓ ' : '! ') + data.message;
+    box.appendChild(title);
+    if (data.attendee) {
+      const detail = document.createElement('small');
+      detail.textContent = data.attendee + ' · ' + (data.event || '');
+      box.appendChild(detail);
+    }
+    if (data.ticket_code) codeField.value = data.ticket_code;
+    resultBox.appendChild(box);
+  }
+
+  async function sendImage(blob, fieldName) {
+    const body = new FormData();
+    body.append(fieldName, blob, fieldName === 'frame' ? 'camera-frame.jpg' : 'qr-ticket-image');
+    const response = await fetch(endpoint, { method: 'POST', body });
+    const data = await response.json();
+    if (!response.ok && data.error) throw new Error(data.error);
+    return data;
+  }
+
+  function stopCamera() {
+    scanning = false;
+    if (stream) stream.getTracks().forEach(track => track.stop());
+    stream = null;
+    video.srcObject = null;
+    video.classList.remove('is-live');
+    startButton.disabled = false;
+    stopButton.disabled = true;
+    state.textContent = 'STOPPED';
+  }
+
+  async function scanLoop() {
+    if (!scanning || busy || video.readyState < 2) {
+      if (scanning) window.setTimeout(scanLoop, 450);
+      return;
+    }
+    busy = true;
+    try {
+      const width = Math.min(video.videoWidth || 640, 960);
+      const height = Math.round(width * (video.videoHeight || 480) / (video.videoWidth || 640));
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d', { willReadFrequently: true }).drawImage(video, 0, 0, width, height);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.72));
+      if (blob) {
+        const data = await sendImage(blob, 'frame');
+        if (data.found) {
+          showResult(data);
+          message.textContent = data.ok ? 'Ticket accepted. Attendance has been recorded.' : data.message;
+          stopCamera();
+          busy = false;
+          return;
+        }
+      }
+    } catch (error) {
+      message.textContent = error.message || 'Could not read this camera frame.';
+    }
+    busy = false;
+    if (scanning) window.setTimeout(scanLoop, 650);
+  }
+
+  startButton.addEventListener('click', async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      message.textContent = 'Camera access is unavailable in this browser. Use image upload or manual entry.';
+      return;
+    }
+    try {
+      message.textContent = 'Waiting for camera permission…';
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      video.srcObject = stream;
+      video.classList.add('is-live');
+      await video.play();
+      scanning = true;
+      startButton.disabled = true;
+      stopButton.disabled = false;
+      state.textContent = 'SCANNING';
+      message.textContent = 'Hold the QR ticket steady inside the frame.';
+      scanLoop();
+    } catch (error) {
+      stopCamera();
+      message.textContent = 'Camera could not start. Allow camera permission, or use image upload/manual entry.';
+    }
+  });
+
+  stopButton.addEventListener('click', stopCamera);
+  uploadForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    const file = document.getElementById('qr-image').files[0];
+    if (!file) return;
+    message.textContent = 'Reading the selected QR image…';
+    try {
+      const data = await sendImage(file, 'qr_image');
+      if (data.found) {
+        showResult(data);
+        message.textContent = data.message;
+      } else {
+        message.textContent = data.error || data.message || 'No QR code found in that image.';
+      }
+    } catch (error) {
+      message.textContent = error.message || 'Could not read this image.';
+    }
+  });
+  window.addEventListener('beforeunload', stopCamera);
+})();
+</script>{% endblock %}

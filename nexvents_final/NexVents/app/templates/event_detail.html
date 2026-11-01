@@ -1,0 +1,53 @@
+{% extends 'base.html' %}{% block title %}{{ event.title }} — NexVents{% endblock %}{% block content %}
+<div class="breadcrumb"><a href="{{ url_for('main.home') }}">Explore</a><span>/</span>{{ event.category }}</div>
+<section class="detail-layout">
+  <div>
+    <div class="detail-cover cover-{{ event.cover }}"><span class="cover-kicker">NEXVENTS / EVENT DETAILS</span><span class="detail-symbol">✳</span><div><span class="tag tag-light">{{ event.category }}</span><h1>{{ event.title }}</h1></div></div>
+    <div class="detail-description"><div class="eyebrow">ABOUT THIS EVENT</div><h2>What to expect</h2><p>{{ event.description }}</p><div class="detail-extra"><div><span>⌖</span><b>Location</b><small>{{ event.venue }}</small></div><div><span>◷</span><b>Date & time</b><small>{{ event.event_date }} · {{ event.event_time }}</small></div></div></div>
+    {% if event.accommodation_enabled %}
+    <section class="info-panel"><div class="eyebrow">OPTIONAL EVENT ADD-ONS</div><h2>Stay and food</h2><p class="muted">Travelling from outside the area? Add the support you need while registering.</p><div class="support-list"><div><b>Stay</b><span>₹{{ '%.0f'|format(event.stay_price) }} · {{ event.stay_slots_left }} places available</span></div><div><b>Food</b><span>₹{{ '%.0f'|format(event.food_price) }}</span></div></div></section>
+    {% endif %}
+    {% if event.medical_location or event.medical_contact or event.security_contact or event.emergency_contact %}
+    <section class="info-panel safety-panel"><div class="eyebrow">EVENT DAY INFORMATION</div><h2>Medical & safety support</h2><p class="muted">Save these details in case you need assistance during the event.</p>
+      {% if event.medical_location %}<div class="support-line"><span>Medical / first-aid desk</span><b>{{ event.medical_location }}</b></div>{% endif %}
+      {% if event.medical_contact %}<div class="support-line"><span>Medical support</span><a href="tel:{{ event.medical_contact|replace(' ','') }}">{{ event.medical_contact }}</a></div>{% endif %}
+      {% if event.security_contact %}<div class="support-line"><span>Campus security</span><a href="tel:{{ event.security_contact|replace(' ','') }}">{{ event.security_contact }}</a></div>{% endif %}
+      {% if event.emergency_contact %}<div class="support-line"><span>Event emergency contact</span><a href="tel:{{ event.emergency_contact|replace(' ','') }}">{{ event.emergency_contact }}</a></div>{% endif %}
+      <small class="muted">For immediate danger, contact local emergency services.</small>
+    </section>{% endif %}
+  </div>
+  <aside class="booking-card">
+    <div class="eyebrow">REGISTRATION</div><h3>Save your place.</h3><div class="booking-price">{% if event.price == 0 %}Free{% else %}₹{{ '%.0f'|format(event.price) }}{% endif %}<small>event entry per attendee</small></div>
+    <div class="seat-track"><span style="width:{{ (event.seats_left / event.capacity * 100)|round|int }}%"></span></div><div class="seat-label"><span>{{ event.seats_left }} seats left</span><span>{{ event.confirmed }}/{{ event.capacity }} booked</span></div>
+    {% if registration %}<div class="registered-note"><b>✓ You're registered</b><small>Status: {{ registration.status }}</small>{% if registration.status=='confirmed' %}<a class="btn btn-primary btn-full" href="{{ url_for('main.ticket', registration_id=registration.id) }}">View my ticket →</a>{% else %}<p class="muted">A place is not confirmed yet. Your waitlist position is saved.</p>{% endif %}</div>
+    {% elif current_user and current_user.role=='student' %}
+      <form method="post" action="{{ url_for('main.event_register', event_id=event.id) }}" class="booking-form" id="event-booking-form">
+        {% if event.accommodation_enabled %}<div class="addon-options"><b>Optional add-ons</b><label class="addon-choice"><input type="checkbox" name="stay_selected" id="stay-selected" value="1" data-price="{{ event.stay_price }}" {% if event.stay_slots_left < 1 or event.seats_left < 1 %}disabled{% endif %}><span><strong>Stay</strong><small>₹{{ '%.0f'|format(event.stay_price) }} · {{ event.stay_slots_left }} places left</small></span></label><label class="addon-choice"><input type="checkbox" name="food_selected" id="food-selected" value="1" data-price="{{ event.food_price }}" {% if event.seats_left < 1 %}disabled{% endif %}><span><strong>Food</strong><small>₹{{ '%.0f'|format(event.food_price) }}</small></span></label>{% if event.seats_left < 1 %}<small class="form-hint">Add-ons can be selected once your event place is confirmed.</small>{% endif %}</div>{% endif %}
+        <div class="fee-summary"><span>Event fee</span><b>₹{{ '%.2f'|format(event.price) }}</b><span>Add-ons</span><b id="addon-amount">₹0.00</b><strong>Estimated total</strong><strong id="booking-total">₹{{ '%.2f'|format(event.price) }}</strong></div>
+        <button class="btn btn-primary btn-full" type="submit">{{ 'Join waitlist' if event.seats_left == 0 else 'Register now' }} <span>→</span></button>
+      </form>
+    {% elif current_user and current_user.role=='admin' %}<a class="btn btn-ghost btn-full" href="{{ url_for('main.admin_dashboard') }}">Back to admin</a>
+    {% elif current_user and current_user.role=='coordinator' %}<a class="btn btn-ghost btn-full" href="{{ url_for('main.coordinator_dashboard') }}">Back to team dashboard</a>
+    {% else %}<a class="btn btn-primary btn-full" href="{{ url_for('main.login', next=url_for('main.event_detail', event_id=event.id)) }}">Log in to register →</a>{% endif %}
+    <p class="booking-foot">Confirmed registrations receive a unique QR entry ticket. Fees are shown for reference; online payment is not enabled in this demo.</p>
+  </aside>
+</section>
+{% endblock %}
+{% block scripts %}<script>
+(() => {
+  const form = document.getElementById('event-booking-form');
+  if (!form) return;
+  const eventPrice = {{ event.price|float }};
+  const stay = document.getElementById('stay-selected');
+  const food = document.getElementById('food-selected');
+  const addon = document.getElementById('addon-amount');
+  const total = document.getElementById('booking-total');
+  const update = () => {
+    const extras = (stay && stay.checked ? Number(stay.dataset.price) : 0) + (food && food.checked ? Number(food.dataset.price) : 0);
+    addon.textContent = `₹${extras.toFixed(2)}`;
+    total.textContent = `₹${(eventPrice + extras).toFixed(2)}`;
+  };
+  [stay, food].filter(Boolean).forEach(input => input.addEventListener('change', update));
+  update();
+})();
+</script>{% endblock %}

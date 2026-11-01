@@ -1,0 +1,28 @@
+{% extends 'base.html' %}{% block title %}NexVents | Campus events{% endblock %}
+{% block content %}
+<section class="hero campus-hero">
+  <div class="hero-copy">
+    <div class="eyebrow"><span class="pulse"></span> CAMPUS EVENT PORTAL</div>
+    <h1>Campus events,<br><span class="gradient-text">all in one place.</span></h1>
+    <p class="hero-sub">Find workshops, hackathons, talks and college activities. Register online and keep your entry ticket in your account.</p>
+    <div class="hero-actions"><a class="btn btn-primary" href="#discover">Browse events <span>↓</span></a><a class="btn btn-ghost" href="{{ url_for('main.ai_assistant') }}">Ask the event assistant</a></div>
+    <div class="hero-proof"><span class="proof-dot"></span><span>Event dates, registration and entry tickets in one place.</span></div>
+  </div>
+  <div class="hero-visual campus-preview">
+    <div class="preview-window">
+      <div class="preview-window-head"><span>UPCOMING ON CAMPUS</span><span class="preview-status">LIVE LIST</span></div>
+      {% if events %}{% set next_event = events[0] %}
+      <div class="preview-date"><b>{{ next_event.event_date[8:10] }}</b><span>{{ next_event.event_date[5:7] }}/{{ next_event.event_date[:4] }}</span></div>
+      <div class="preview-event"><span class="tag">{{ next_event.category }}</span><h2>{{ next_event.title }}</h2><p>{{ next_event.venue }} · {{ next_event.event_time }}</p><a href="{{ url_for('main.event_detail', event_id=next_event.id) }}">View event details →</a></div>
+      {% else %}<div class="preview-empty"><b>No upcoming events yet</b><p>New events will appear here when an organiser publishes them.</p></div>{% endif %}
+      <div class="preview-footer"><span>{{ events|length }} upcoming event{{ '' if events|length == 1 else 's' }}</span><span>Registration · QR ticket · Attendance</span></div>
+    </div>
+  </div>
+</section>
+<section class="feature-strip"><div><b>01</b><span><strong>Browse</strong><small>Check event dates and venues</small></span></div><div><b>02</b><span><strong>Register</strong><small>Save your place online</small></span></div><div><b>03</b><span><strong>Check in</strong><small>Use your ticket at the desk</small></span></div></section>
+<section class="section" id="discover"><div class="section-head"><div><div class="eyebrow">EVENT LISTING</div><h2>Upcoming events</h2><p class="muted">Choose an event and see the details before registering.</p></div><span class="count-pill">{{ events|length }} listed</span></div>
+<form class="filter-bar" method="get" action="{{ url_for('main.home') }}"><div class="search-input"><span>⌕</span><input name="q" value="{{ search }}" placeholder="Search by event, topic or venue..."></div><select name="category"><option value="">All categories</option>{% for c in categories %}<option value="{{ c }}" {% if selected_category==c %}selected{% endif %}>{{ c }}</option>{% endfor %}</select><button class="btn btn-dark" type="submit">Search</button>{% if search or selected_category %}<a class="clear-filter" href="{{ url_for('main.home') }}">Clear filters</a>{% endif %}</form>
+{% if events %}<div class="event-grid">{% for event in events %}<article class="event-card"><a class="event-cover cover-{{ event.cover }}" href="{{ url_for('main.event_detail', event_id=event.id) }}"><span class="cover-kicker">{{ event.category }}</span><span class="cover-symbol">{% if event.category=='Technology' %}⌘{% elif event.category=='Hackathon' %}&lt;/&gt;{% elif event.category=='Creative' %}✳{% else %}•{% endif %}</span><span class="cover-date">{{ event.event_date[8:10] }} <small>{{ event.event_date[5:7] }}/{{ event.event_date[:4] }}</small></span></a><div class="event-body"><div class="event-meta"><span class="tag">{{ event.category }}</span><span class="seats">{{ event.seats_left }} seats left</span></div><h3><a href="{{ url_for('main.event_detail', event_id=event.id) }}">{{ event.title }}</a></h3><p>{{ event.description }}</p><div class="event-foot"><span>⌖ {{ event.venue }}</span><a href="{{ url_for('main.event_detail', event_id=event.id) }}" aria-label="View event">View →</a></div></div></article>{% endfor %}</div>{% else %}<div class="empty-state"><div>—</div><h3>No events found</h3><p>Try another search, or check again after an organiser adds an event.</p><a class="btn btn-primary" href="{{ url_for('main.home') }}">View all events</a></div>{% endif %}
+</section>
+<section class="bottom-cta"><div><div class="eyebrow">FOR EVENT ORGANISERS</div><h2>Have an event to add?</h2><p>Sign in to publish an event and manage student registrations.</p></div><a class="btn btn-light" href="{{ url_for('main.login') }}">Organiser login →</a></section>
+{% endblock %}

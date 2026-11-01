@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f6f8">
+  <title>{% block title %}NexVents | Campus event portal{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <nav class="topbar">
+    <a class="brand" href="{{ url_for('main.home') }}">
+      <span class="brand-mark">N</span>
+      <span>Nex<span class="brand-accent">Vents</span><small>CAMPUS EVENT PORTAL</small></span>
+    </a>
+    <div class="nav-links">
+      <a href="{{ url_for('main.home') }}">Events</a>
+      <a href="{{ url_for('main.ai_assistant') }}">Assistant</a>
+      {% if current_user %}
+        {% if current_user.role == 'admin' %}
+          <a href="{{ url_for('main.admin_dashboard') }}">Admin</a>
+          <a href="{{ url_for('main.coordinator_management') }}">Coordinators</a>
+          <a href="{{ url_for('main.accommodation_bookings') }}">Accommodation</a>
+          <a href="{{ url_for('main.checkin') }}">Check-in</a>
+        {% elif current_user.role == 'coordinator' %}
+          <a href="{{ url_for('main.coordinator_dashboard') }}">Team dashboard</a>
+        {% else %}
+          <a href="{{ url_for('main.dashboard') }}">My Dashboard</a>
+        {% endif %}
+        <span class="nav-user">{{ current_user.name.split(' ')[0] }}</span>
+        <a class="nav-cta" href="{{ url_for('main.logout') }}">Log out</a>
+      {% else %}
+        <a href="{{ url_for('main.coordinator_login') }}">Coordinator login</a>
+        <a href="{{ url_for('main.login') }}">Log in</a>
+        <a class="nav-cta" href="{{ url_for('main.register') }}">Get started <span>↗</span></a>
+      {% endif %}
+    </div>
+    <button class="mobile-menu" type="button" aria-label="Toggle menu" onclick="document.querySelector('.nav-links').classList.toggle('show')">☰</button>
+  </nav>
+  <main class="page-shell">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-stack">
+          {% for category, message in messages %}
+            <div class="flash {{ category }}">{{ message }}<button type="button" onclick="this.parentElement.remove()">×</button></div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="footer">
+    <div>
+      <a class="brand footer-brand" href="{{ url_for('main.home') }}"><span class="brand-mark">N</span><span>Nex<span class="brand-accent">Vents</span></span></a>
+      <p>Campus events and registrations, in one place.</p>
+    </div>
+    <span>Browse events, register and check in with a QR ticket.</span>
+    <span>© {{ today[:4] }} NexVents</span>
+  </footer>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
